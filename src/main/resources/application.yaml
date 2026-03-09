@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: EDM
+  datasource:
+    url: jdbc:postgresql://localhost:5000/edm
+    username: admin
+    password: admin123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+
+
+server:
+  port: 6001
