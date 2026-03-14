@@ -24,4 +24,12 @@ public class SecurityController {
         return ResponseEntity.status(HttpStatus.OK).body("Security is created");
 
     }
+
+    @PostMapping("/entity")
+    @PreAuthorize("hasAuthority('RBAC_MANAGE')")
+    public ResponseEntity<?> createEntity(@RequestBody SecurityReqDto securityReqDto){
+
+        return ResponseEntity.status(HttpStatus.OK).body("Entity is created");
+
+    }
 }

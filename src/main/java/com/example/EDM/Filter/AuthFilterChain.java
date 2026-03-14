@@ -10,6 +10,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -20,7 +21,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -38,77 +41,50 @@ public class AuthFilterChain extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        System.out.println("entering point");
-
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        }
-
-        String token = null;
-        for (Cookie c : cookies) {
-            if (c.getName().equals("JWT_TOKEN")) {
-                token = c.getValue();
-                System.out.println("token"+token);
+        String token=null;
+        for(Cookie c:request.getCookies()){
+            if(c.getName().equals("JWT_TOKEN")){
+                token=c.getValue();
                 break;
             }
         }
-
-        if (token == null) {
-            logger.info("token null");
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        if(token==null){
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             return;
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, "JWT_TOKEN=" + token);
-        HttpEntity<?> entity = new HttpEntity<>(headers);
+        HttpHeaders httpHeaders=new HttpHeaders();
+        httpHeaders.add(HttpHeaders.COOKIE,"JWT_TOKEN="+token);
+        HttpEntity<?> httpEntity=new HttpEntity<>(httpHeaders);
 
-        // ✅ Declare outside try so it's accessible after
-        TokenValidationResponse validationResponse = null;
+        TokenValidationResponse tokenValidationResponse=null;
+        try{
+            tokenValidationResponse=restTemplate.exchange("http://localhost:8080/api/v1/auth/validate-token",
+                    HttpMethod.POST,httpEntity,TokenValidationResponse.class).getBody();
 
-        try {
-            validationResponse = restTemplate.exchange(
-                    "http://localhost:8080/api/v1/auth/validate-token",
-                    HttpMethod.POST,
-                    entity,
-                    TokenValidationResponse.class
-            ).getBody();
 
-        } catch (HttpClientErrorException e) {
-            System.out.println("service is not authorised");
+        }
+        catch (HttpClientErrorException e){
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
-
-        } catch (HttpServerErrorException e) {
+        }
+        catch (HttpServerErrorException e){
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return;
-
-        } catch (ResourceAccessException e) {
-            throw e;
         }
 
-        // ✅ Null and valid check outside try
-        if (validationResponse == null || !validationResponse.isValid()) {
+        if(tokenValidationResponse==null||!tokenValidationResponse.isValid()){
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
 
-        System.out.println("Roles for the current user"+validationResponse.getRoles());
+        System.out.println("Roles"+tokenValidationResponse.getRoles());
+        Set<GrantedAuthority> authorities=tokenValidationResponse.getRoles()
+                .stream().map(r->new SimpleGrantedAuthority(r)).collect(Collectors.toSet());
 
-        // ✅ Build authToken here where validationResponse is accessible
-        List<SimpleGrantedAuthority> authorities = validationResponse.getRoles()
-                .stream()
-                .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toList());
 
-        UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(
-                        validationResponse.getUsername(),
-                        null,
-                        authorities
-                );
+
+        UsernamePasswordAuthenticationToken authToken=new UsernamePasswordAuthenticationToken(tokenValidationResponse.getUsername(),null,authorities);
 
         SecurityContextHolder.getContext().setAuthentication(authToken);
         filterChain.doFilter(request, response);
