@@ -20,7 +20,6 @@ public class SecurityController {
     @PreAuthorize("hasAuthority('RBAC_MANAGE')")
     public ResponseEntity<?> createSecurity(@RequestBody SecurityReqDto securityReqDto){
 
-
         return ResponseEntity.status(HttpStatus.OK).body("Security is created");
 
     }

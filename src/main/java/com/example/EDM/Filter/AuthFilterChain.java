@@ -39,54 +39,31 @@ public class AuthFilterChain extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
 
-        String token=null;
-        for(Cookie c:request.getCookies()){
-            if(c.getName().equals("JWT_TOKEN")){
-                token=c.getValue();
-                break;
-            }
-        }
-        if(token==null){
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
+        String username = request.getHeader("X-User-Name");
+        String rolesHeader = request.getHeader("X-User-Roles");
 
-        HttpHeaders httpHeaders=new HttpHeaders();
-        httpHeaders.add(HttpHeaders.COOKIE,"JWT_TOKEN="+token);
-        HttpEntity<?> httpEntity=new HttpEntity<>(httpHeaders);
+        System.out.println("username"+username);
+        System.out.println("rolesHeader"+rolesHeader);
 
-        TokenValidationResponse tokenValidationResponse=null;
-        try{
-            tokenValidationResponse=restTemplate.exchange("http://localhost:8080/api/v1/auth/validate-token",
-                    HttpMethod.POST,httpEntity,TokenValidationResponse.class).getBody();
+        if (username != null && rolesHeader != null) {
 
+            Set<GrantedAuthority> authorities = List.of(rolesHeader.split(","))
+                    .stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .collect(Collectors.toSet());
 
-        }
-        catch (HttpClientErrorException e){
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        }
-        catch (HttpServerErrorException e){
-            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-            return;
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(username, null, authorities);
+
+            SecurityContextHolder.getContext().setAuthentication(authToken);
         }
 
-        if(tokenValidationResponse==null||!tokenValidationResponse.isValid()){
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        }
-
-        System.out.println("Roles"+tokenValidationResponse.getRoles());
-        Set<GrantedAuthority> authorities=tokenValidationResponse.getRoles()
-                .stream().map(r->new SimpleGrantedAuthority(r)).collect(Collectors.toSet());
-
-
-
-        UsernamePasswordAuthenticationToken authToken=new UsernamePasswordAuthenticationToken(tokenValidationResponse.getUsername(),null,authorities);
-
-        SecurityContextHolder.getContext().setAuthentication(authToken);
         filterChain.doFilter(request, response);
     }
+
+
+
 }

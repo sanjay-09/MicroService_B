@@ -13,4 +13,4 @@ spring:
 
 
 server:
-  port: 6001
+  port: 6005
